@@ -7,14 +7,25 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createHostWorkspaceEditTool } from "./agent-tools.read.js";
+import {
+  createHostWorkspaceEditTool,
+  createHostWorkspaceWriteTool,
+  createSandboxedWriteTool,
+} from "./agent-tools.read.js";
+import type { SandboxFsBridge } from "./sandbox/fs-bridge.js";
 
 type CapturedEditOperations = {
   access: (absolutePath: string) => Promise<void>;
 };
 
+type CapturedWriteOperations = {
+  readFile?: (absolutePath: string) => Promise<Buffer | string>;
+  statFile?: (absolutePath: string) => Promise<unknown>;
+};
+
 const mocks = vi.hoisted(() => ({
   operations: undefined as CapturedEditOperations | undefined,
+  writeOperations: undefined as CapturedWriteOperations | undefined,
 }));
 
 vi.mock("./sessions/index.js", async () => {
@@ -32,6 +43,17 @@ vi.mock("./sessions/index.js", async () => {
         }),
       };
     },
+    createWriteTool: (_cwd: string, options?: { operations?: CapturedWriteOperations }) => {
+      mocks.writeOperations = options?.operations;
+      return {
+        name: "write",
+        description: "test write tool",
+        parameters: { type: "object", properties: {} },
+        execute: async () => ({
+          content: [{ type: "text" as const, text: "ok" }],
+        }),
+      };
+    },
   };
 });
 
@@ -40,6 +62,7 @@ describe("createHostWorkspaceEditTool host access mapping", () => {
 
   afterEach(async () => {
     mocks.operations = undefined;
+    mocks.writeOperations = undefined;
     if (tmpDir) {
       await fs.rm(tmpDir, { recursive: true, force: true });
       tmpDir = "";
@@ -77,4 +100,21 @@ describe("createHostWorkspaceEditTool host access mapping", () => {
       ).resolves.toBeUndefined();
     },
   );
+
+  it("provides readback and stat operations to host writes", () => {
+    createHostWorkspaceWriteTool("/workspace", { workspaceOnly: false });
+
+    expect(mocks.writeOperations?.readFile).toBeTypeOf("function");
+    expect(mocks.writeOperations?.statFile).toBeTypeOf("function");
+  });
+
+  it("provides readback and stat operations to sandbox writes", () => {
+    createSandboxedWriteTool({
+      root: "/workspace",
+      bridge: {} as SandboxFsBridge,
+    });
+
+    expect(mocks.writeOperations?.readFile).toBeTypeOf("function");
+    expect(mocks.writeOperations?.statFile).toBeTypeOf("function");
+  });
 });
