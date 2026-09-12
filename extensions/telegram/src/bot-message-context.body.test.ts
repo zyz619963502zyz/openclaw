@@ -10,7 +10,7 @@ const {
 } = vi.hoisted(() => ({
   resolveStickerVisionSupportRuntimeMock: vi.fn(async (_params: unknown) => false),
   transcribeFirstAudioMock: vi.fn(),
-  sendTelegramPreflightAudioTranscriptEchoMock: vi.fn(async () => undefined),
+  sendTelegramPreflightAudioTranscriptEchoMock: vi.fn(async (_params: unknown) => undefined),
   triggerInternalHookMock: vi.fn<(event: unknown) => Promise<void>>(async () => undefined),
 }));
 
